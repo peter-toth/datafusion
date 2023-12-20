@@ -79,3 +79,87 @@ impl TreeNode for LogicalPlan {
         Ok(tnr)
     }
 }
+
+#[cfg(test)]
+mod test {
+    use crate::{LogicalPlan, LogicalPlanBuilder};
+    use datafusion_common::tree_node::{Transformed, TreeNode, TreeNodeRecursion};
+    use std::time::Instant;
+
+    fn create_union_tree(level: u32) -> LogicalPlanBuilder {
+        if level == 0 {
+            LogicalPlanBuilder::empty(true)
+        } else {
+            create_union_tree(level - 1)
+                .union(create_union_tree(level - 1).build().unwrap())
+                .unwrap()
+        }
+    }
+
+    #[test]
+    fn transform_test() {
+        let now = Instant::now();
+        let mut union_tree = create_union_tree(23).build().unwrap();
+        println!("create_union_tree: {}", now.elapsed().as_millis());
+
+        let now = Instant::now();
+        union_tree = union_tree
+            .transform_down_old(&mut |p| Ok(Transformed::No(p)))
+            .unwrap();
+        println!(
+            "union_tree.transform_down_old: {}",
+            now.elapsed().as_millis()
+        );
+
+        let now = Instant::now();
+        let mut union_tree_clone = union_tree.clone();
+        println!("union_tree.clone: {}", now.elapsed().as_millis());
+
+        let now = Instant::now();
+        union_tree_clone
+            .transform_down(&mut |_p| Ok(TreeNodeRecursion::Continue))
+            .unwrap();
+        println!(
+            "union_tree_clone.transform_down: {}",
+            now.elapsed().as_millis()
+        );
+
+        println!("results: {}", union_tree == union_tree_clone);
+
+        let now = Instant::now();
+        union_tree = union_tree
+            .transform_down_old(&mut |p| match p {
+                LogicalPlan::EmptyRelation(_) => Ok(Transformed::Yes(
+                    LogicalPlanBuilder::empty(false).build().unwrap(),
+                )),
+                o => Ok(Transformed::No(o)),
+            })
+            .unwrap();
+        println!(
+            "union_tree.transform_down_old 2: {}",
+            now.elapsed().as_millis()
+        );
+
+        // Need to keep a reference to `union_tree_clone`  till the end so as not to account its destruction to any experiment
+        let union_tree_clone2 = union_tree_clone.clone();
+
+        let now = Instant::now();
+        union_tree_clone
+            .transform_down(&mut |p| match p {
+                LogicalPlan::EmptyRelation(_) => {
+                    *p = LogicalPlanBuilder::empty(false).build().unwrap();
+                    Ok(TreeNodeRecursion::Continue)
+                }
+                _ => Ok(TreeNodeRecursion::Continue),
+            })
+            .unwrap();
+        println!(
+            "union_tree_clone.transform_down 2: {}",
+            now.elapsed().as_millis()
+        );
+
+        println!("results: {}", union_tree == union_tree_clone);
+
+        println!("results: {}", union_tree_clone == union_tree_clone2);
+    }
+}

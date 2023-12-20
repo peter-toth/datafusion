@@ -477,3 +477,75 @@ where
     }
     Ok(v)
 }
+
+#[cfg(test)]
+mod test {
+    use crate::{and, lit, Expr};
+    use datafusion_common::tree_node::{Transformed, TreeNode, TreeNodeRecursion};
+    use std::time::Instant;
+
+    fn create_and_tree(level: u32) -> Expr {
+        if level == 0 {
+            lit(true)
+        } else {
+            and(create_and_tree(level - 1), create_and_tree(level - 1))
+        }
+    }
+
+    #[test]
+    fn transform_test() {
+        let now = Instant::now();
+        let mut and_tree = create_and_tree(25);
+        println!("create_and_tree: {}", now.elapsed().as_millis());
+
+        let now = Instant::now();
+        and_tree = and_tree
+            .transform_down_old(&mut |e| Ok(Transformed::No(e)))
+            .unwrap();
+        println!("and_tree.transform_down_old: {}", now.elapsed().as_millis());
+
+        let now = Instant::now();
+        let mut and_tree_clone = and_tree.clone();
+        println!("and_tree.clone: {}", now.elapsed().as_millis());
+
+        let now = Instant::now();
+        and_tree_clone
+            .transform_down(&mut |_e| Ok(TreeNodeRecursion::Continue))
+            .unwrap();
+        println!(
+            "and_tree_clone.transform_down: {}",
+            now.elapsed().as_millis()
+        );
+
+        println!("results: {}", and_tree == and_tree_clone);
+
+        let now = Instant::now();
+        and_tree = and_tree
+            .transform_down_old(&mut |e| match e {
+                Expr::Literal(_) => Ok(Transformed::Yes(lit(false))),
+                o => Ok(Transformed::No(o)),
+            })
+            .unwrap();
+        println!(
+            "and_tree.transform_down_old 2: {}",
+            now.elapsed().as_millis()
+        );
+
+        let now = Instant::now();
+        and_tree_clone
+            .transform_down(&mut |e| match e {
+                Expr::Literal(_) => {
+                    *e = lit(false);
+                    Ok(TreeNodeRecursion::Continue)
+                }
+                _ => Ok(TreeNodeRecursion::Continue),
+            })
+            .unwrap();
+        println!(
+            "and_tree_clone.transform_down 2: {}",
+            now.elapsed().as_millis()
+        );
+
+        println!("results: {}", and_tree == and_tree_clone);
+    }
+}

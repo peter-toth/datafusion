@@ -268,6 +268,7 @@ impl PhysicalOptimizerRule for EnforceDistribution {
 ///
 type RequiredKeyOrdering = Vec<Arc<dyn PhysicalExpr>>;
 
+#[allow(clippy::type_complexity)]
 fn adjust_input_keys_ordering(
     plan: Arc<dyn ExecutionPlan>,
     required_key_ordering: RequiredKeyOrdering,

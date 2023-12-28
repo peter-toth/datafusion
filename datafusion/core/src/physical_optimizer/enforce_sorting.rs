@@ -41,7 +41,7 @@ use crate::error::Result;
 use crate::physical_optimizer::replace_with_order_preserving_variants::{
     replace_with_order_preserving_variants, OrderPreservationContext,
 };
-use crate::physical_optimizer::sort_pushdown::{pushdown_sorts, SortPushDown};
+use crate::physical_optimizer::sort_pushdown::pushdown_requirement_to_children;
 use crate::physical_optimizer::utils::{
     add_sort_above, is_coalesce_partitions, is_limit, is_repartition, is_sort,
     is_sort_preserving_merge, is_union, is_window,
@@ -309,10 +309,63 @@ impl PhysicalOptimizerRule for EnforceSorting {
 
         // Execute a top-down traversal to exploit sort push-down opportunities
         // missed by the bottom-up traversal:
-        let mut sort_pushdown = SortPushDown::new(updated_plan.plan);
-        sort_pushdown.assign_initial_requirements();
-        let adjusted = sort_pushdown.transform_down(&pushdown_sorts)?;
-        Ok(adjusted.plan)
+        let plan = updated_plan.plan.transform_down_with_payload(
+            &mut |mut plan, required_ordering: Option<Vec<PhysicalSortRequirement>>| {
+                let parent_required = required_ordering.as_deref().unwrap_or(&[]);
+                if let Some(sort_exec) = plan.as_any().downcast_ref::<SortExec>() {
+                    if !plan
+                        .equivalence_properties()
+                        .ordering_satisfy_requirement(parent_required)
+                    {
+                        // If the current plan is a SortExec, modify it to satisfy parent requirements:
+                        let mut new_plan = sort_exec.input().clone();
+                        add_sort_above(&mut new_plan, parent_required, sort_exec.fetch());
+                        plan = new_plan;
+                    };
+                    let required_ordering = plan
+                        .output_ordering()
+                        .map(PhysicalSortRequirement::from_sort_exprs)
+                        .unwrap_or_default();
+                    // Since new_plan is a SortExec, we can safely get the 0th index.
+                    let child = plan.children().swap_remove(0);
+                    if let Some(adjusted) =
+                        pushdown_requirement_to_children(&child, &required_ordering)?
+                    {
+                        // Can push down requirements
+                        Ok((Transformed::Yes(child), adjusted))
+                    } else {
+                        // Can not push down requirements
+                        let required_input_ordering = plan.required_input_ordering();
+                        Ok((Transformed::Yes(plan), required_input_ordering))
+                    }
+                } else {
+                    // Executors other than SortExec
+                    if plan
+                        .equivalence_properties()
+                        .ordering_satisfy_requirement(parent_required)
+                    {
+                        // Satisfies parent requirements, immediately return.
+                        let required_input_ordering = plan.required_input_ordering();
+                        return Ok((Transformed::Yes(plan), required_input_ordering));
+                    }
+                    // Can not satisfy the parent requirements, check whether the requirements can be pushed down:
+                    if let Some(adjusted) =
+                        pushdown_requirement_to_children(&plan, parent_required)?
+                    {
+                        Ok((Transformed::Yes(plan), adjusted))
+                    } else {
+                        // Can not push down requirements, add new SortExec:
+                        let mut new_plan = plan;
+                        add_sort_above(&mut new_plan, parent_required, None);
+                        let required_input_ordering = new_plan.required_input_ordering();
+                        // Can not push down requirements
+                        Ok((Transformed::Yes(new_plan), required_input_ordering))
+                    }
+                }
+            },
+            None,
+        )?;
+        Ok(plan)
     }
 
     fn name(&self) -> &str {

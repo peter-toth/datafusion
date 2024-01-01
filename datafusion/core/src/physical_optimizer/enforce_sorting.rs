@@ -40,7 +40,8 @@ use std::sync::Arc;
 use crate::config::ConfigOptions;
 use crate::error::Result;
 use crate::physical_optimizer::replace_with_order_preserving_variants::{
-    replace_with_order_preserving_variants, OrderPreservationContext,
+    propagate_order_maintaining_connections_down,
+    replace_with_order_preserving_variants_up,
 };
 use crate::physical_optimizer::sort_pushdown::pushdown_requirement_to_children;
 use crate::physical_optimizer::utils::{
@@ -275,20 +276,26 @@ impl PhysicalOptimizerRule for EnforceSorting {
             adjusted.plan
         };
 
-        let plan_with_pipeline_fixer = OrderPreservationContext::new(new_plan);
-        let updated_plan =
-            plan_with_pipeline_fixer.transform_up(&|plan_with_pipeline_fixer| {
-                replace_with_order_preserving_variants(
-                    plan_with_pipeline_fixer,
+        let (updated_plan, _) = new_plan.transform_with_payload(
+            &mut |plan, ordering_connection| {
+                propagate_order_maintaining_connections_down(plan, ordering_connection)
+            },
+            false,
+            &mut |plan, ordering_connection, order_preserving_children| {
+                replace_with_order_preserving_variants_up(
+                    plan,
+                    ordering_connection,
+                    order_preserving_children,
                     false,
                     true,
                     config,
                 )
-            })?;
+            },
+        )?;
 
         // Execute a top-down traversal to exploit sort push-down opportunities
         // missed by the bottom-up traversal:
-        let plan = updated_plan.plan.transform_down_with_payload(
+        let plan = updated_plan.transform_down_with_payload(
             &mut |mut plan, required_ordering: Option<Vec<PhysicalSortRequirement>>| {
                 let parent_required = required_ordering.as_deref().unwrap_or(&[]);
                 if let Some(sort_exec) = plan.as_any().downcast_ref::<SortExec>() {

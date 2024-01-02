@@ -65,6 +65,7 @@ use datafusion_physical_plan::unbounded_output;
 ///      with the order maintaining operator variant of the current node.
 ///    - If the node can't be replaced but we got order maintaining alternative from its
 ///      children then extend the alternative plan with the current node.
+#[allow(clippy::type_complexity)]
 pub(crate) fn propagate_order_maintaining_connections_down(
     plan: Arc<dyn ExecutionPlan>,
     ordering_connection: bool,
@@ -89,6 +90,7 @@ pub(crate) fn propagate_order_maintaining_connections_down(
     ))
 }
 
+#[allow(clippy::type_complexity)]
 pub(crate) fn replace_with_order_preserving_variants_up(
     plan: Arc<dyn ExecutionPlan>,
     ordering_connection: bool,

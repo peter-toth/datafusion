@@ -393,7 +393,7 @@ mod tests {
     #[rstest]
     #[tokio::test]
     async fn test_with_inter_children_change_only(
-        #[values(false)] source_unbounded: bool,
+        #[values(false, true)] source_unbounded: bool,
     ) -> Result<()> {
         let schema = create_test_schema()?;
         let sort_exprs = vec![sort_expr_default("a", &schema)];

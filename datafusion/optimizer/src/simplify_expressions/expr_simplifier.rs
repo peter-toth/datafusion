@@ -31,10 +31,11 @@ use arrow::{
     datatypes::{DataType, Field, Schema},
     record_batch::RecordBatch,
 };
+use datafusion_common::tree_node::TreeNodeRecursion;
 use datafusion_common::{
     cast::{as_large_list_array, as_list_array},
     plan_err,
-    tree_node::{RewriteRecursion, TreeNode, TreeNodeRewriter},
+    tree_node::{TreeNode, TreeNodeRewriter},
 };
 use datafusion_common::{
     exec_err, internal_err, DFSchema, DFSchemaRef, DataFusionError, Result, ScalarValue,
@@ -250,9 +251,9 @@ struct ConstEvaluator<'a> {
 }
 
 impl<'a> TreeNodeRewriter for ConstEvaluator<'a> {
-    type N = Expr;
+    type Node = Expr;
 
-    fn pre_visit(&mut self, expr: &Expr) -> Result<RewriteRecursion> {
+    fn f_down(&mut self, expr: Expr) -> Result<(Expr, TreeNodeRecursion)> {
         // Default to being able to evaluate this node
         self.can_evaluate.push(true);
 
@@ -260,7 +261,7 @@ impl<'a> TreeNodeRewriter for ConstEvaluator<'a> {
         // stack as not ok (as all parents have at least one child or
         // descendant that can not be evaluated
 
-        if !Self::can_evaluate(expr) {
+        if !Self::can_evaluate(&expr) {
             // walk back up stack, marking first parent that is not mutable
             let parent_iter = self.can_evaluate.iter_mut().rev();
             for p in parent_iter {
@@ -276,10 +277,10 @@ impl<'a> TreeNodeRewriter for ConstEvaluator<'a> {
         // NB: do not short circuit recursion even if we find a non
         // evaluatable node (so we can fold other children, args to
         // functions, etc)
-        Ok(RewriteRecursion::Continue)
+        Ok((expr, TreeNodeRecursion::Continue))
     }
 
-    fn mutate(&mut self, expr: Expr) -> Result<Expr> {
+    fn f_up(&mut self, expr: Expr) -> Result<Expr> {
         match self.can_evaluate.pop() {
             Some(true) => Ok(Expr::Literal(self.evaluate_to_scalar(expr)?)),
             Some(false) => Ok(expr),
@@ -423,10 +424,10 @@ impl<'a, S> Simplifier<'a, S> {
 }
 
 impl<'a, S: SimplifyInfo> TreeNodeRewriter for Simplifier<'a, S> {
-    type N = Expr;
+    type Node = Expr;
 
     /// rewrite the expression simplifying any constant expressions
-    fn mutate(&mut self, expr: Expr) -> Result<Expr> {
+    fn f_up(&mut self, expr: Expr) -> Result<Expr> {
         use datafusion_expr::Operator::{
             And, BitwiseAnd, BitwiseOr, BitwiseShiftLeft, BitwiseShiftRight, BitwiseXor,
             Divide, Eq, Modulo, Multiply, NotEq, Or, RegexIMatch, RegexMatch,

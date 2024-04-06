@@ -634,7 +634,7 @@ impl LogicalPlan {
     pub fn using_columns(&self) -> Result<Vec<HashSet<Column>>, DataFusionError> {
         let mut using_columns: Vec<HashSet<Column>> = vec![];
 
-        self.apply_with_subqueries(&mut |plan| {
+        self.apply(&mut |plan| {
             if let LogicalPlan::Join(Join {
                 join_constraint: JoinConstraint::Using,
                 on,
@@ -1347,17 +1347,6 @@ impl LogicalPlan {
         )
     }
 
-    pub fn apply_with_subqueries<F: FnMut(&Self) -> Result<TreeNodeRecursion>>(
-        &self,
-        f: &mut F,
-    ) -> Result<TreeNodeRecursion> {
-        self.apply(&mut |n| {
-            f(n)?
-                .visit_children(|| self.apply_subqueries(|c| c.apply_with_subqueries(f)))?
-                .visit_sibling(|| self.apply_children(|c| c.apply_with_subqueries(f)))
-        })
-    }
-
     pub fn transform_with_subqueries<F: Fn(Self) -> Result<Transformed<Self>>>(
         self,
         f: &F,
@@ -1499,7 +1488,7 @@ impl LogicalPlan {
     ) -> Result<HashMap<String, Option<DataType>>, DataFusionError> {
         let mut param_types: HashMap<String, Option<DataType>> = HashMap::new();
 
-        self.apply_with_subqueries(&mut |plan| {
+        self.apply(&mut |plan| {
             plan.apply_expressions(|expr| {
                 expr.apply(&mut |expr| {
                     if let Expr::Placeholder(Placeholder { id, data_type }) = expr {

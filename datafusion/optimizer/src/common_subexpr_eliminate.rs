@@ -148,15 +148,15 @@ pub struct CommonSubexprEliminate {
 #[derive(Debug)]
 enum FoundCommonExprs {
     /// No common expressions were found
-    No { original_exprs: Vec<Vec<Expr>> },
+    No { original_exprs_list: Vec<Vec<Expr>> },
     /// Common expressions were found
     Yes {
         /// extracted common expressions
         common_exprs: Vec<(Expr, String)>,
         /// new expressions with common subexpressions replaced
-        new_exprs: Vec<Vec<Expr>>,
+        new_exprs_list: Vec<Vec<Expr>>,
         /// original expressions
-        original_exprs: Vec<Vec<Expr>>,
+        original_exprs_list: Vec<Vec<Expr>>,
     },
 }
 
@@ -257,10 +257,7 @@ impl CommonSubexprEliminate {
 
     /// Extracts common sub-expressions and rewrites `exprs_list`.
     ///
-    /// Returns a tuple of:
-    /// 1. The rewritten expressions
-    /// 2. An optional tuple that contains the extracted common sub-expressions and the
-    ///    original `exprs_list`.
+    /// Returns `FoundCommonExprs` recording the result of the extraction
     fn find_common_exprs(
         &self,
         exprs_list: Vec<Vec<Expr>>,
@@ -296,12 +293,12 @@ impl CommonSubexprEliminate {
 
             Ok(Transformed::yes(FoundCommonExprs::Yes {
                 common_exprs: common_exprs.into_values().collect(),
-                new_exprs: new_exprs_list,
-                original_exprs: exprs_list,
+                new_exprs_list,
+                original_exprs_list: exprs_list,
             }))
         } else {
             Ok(Transformed::no(FoundCommonExprs::No {
-                original_exprs: exprs_list,
+                original_exprs_list: exprs_list,
             }))
         }
     }
@@ -380,16 +377,16 @@ impl CommonSubexprEliminate {
                 // original input.
                 FoundCommonExprs::Yes {
                     common_exprs,
-                    new_exprs: new_window_expr_list,
-                    original_exprs: window_expr_list,
+                    new_exprs_list,
+                    original_exprs_list,
                 } => {
                     build_common_expr_project_plan(input, common_exprs).map(|new_input| {
-                        (new_window_expr_list, new_input, Some(window_expr_list))
+                        (new_exprs_list, new_input, Some(original_exprs_list))
                     })
                 }
-                FoundCommonExprs::No { original_exprs } => {
-                    Ok((original_exprs, input, None))
-                }
+                FoundCommonExprs::No {
+                    original_exprs_list,
+                } => Ok((original_exprs_list, input, None)),
             })?
             // Recurse into the new input.
             // (This is similar to what a `ApplyOrder::TopDown` optimizer rule would do.)
@@ -471,15 +468,15 @@ impl CommonSubexprEliminate {
                     // original input.
                     FoundCommonExprs::Yes {
                         common_exprs,
-                        new_exprs: mut new_expr_list,
-                        original_exprs: mut expr_list,
+                        mut new_exprs_list,
+                        mut original_exprs_list,
                     } => {
-                        let new_aggr_expr = new_expr_list.pop().unwrap();
-                        let new_group_expr = new_expr_list.pop().unwrap();
+                        let new_aggr_expr = new_exprs_list.pop().unwrap();
+                        let new_group_expr = new_exprs_list.pop().unwrap();
 
                         build_common_expr_project_plan(input, common_exprs).map(
                             |new_input| {
-                                let aggr_expr = expr_list.pop().unwrap();
+                                let aggr_expr = original_exprs_list.pop().unwrap();
                                 (
                                     new_aggr_expr,
                                     new_group_expr,
@@ -490,9 +487,11 @@ impl CommonSubexprEliminate {
                         )
                     }
 
-                    FoundCommonExprs::No { mut original_exprs } => {
-                        let new_aggr_expr = original_exprs.pop().unwrap();
-                        let new_group_expr = original_exprs.pop().unwrap();
+                    FoundCommonExprs::No {
+                        mut original_exprs_list,
+                    } => {
+                        let new_aggr_expr = original_exprs_list.pop().unwrap();
+                        let new_group_expr = original_exprs_list.pop().unwrap();
 
                         Ok((new_aggr_expr, new_group_expr, input, None))
                     }
@@ -521,14 +520,14 @@ impl CommonSubexprEliminate {
                 .map_data(|common| {
                     match common {
                         FoundCommonExprs::Yes {
-                            common_exprs: common_aggr_exprs,
-                            new_exprs: mut new_aggr_list,
-                            original_exprs: mut aggr_list,
+                            common_exprs,
+                            mut new_exprs_list,
+                            mut original_exprs_list,
                         } => {
-                            let rewritten_aggr_expr = new_aggr_list.pop().unwrap();
-                            let new_aggr_expr = aggr_list.pop().unwrap();
+                            let rewritten_aggr_expr = new_exprs_list.pop().unwrap();
+                            let new_aggr_expr = original_exprs_list.pop().unwrap();
 
-                            let mut agg_exprs = common_aggr_exprs
+                            let mut agg_exprs = common_exprs
                                 .into_iter()
                                 .map(|(expr, expr_alias)| expr.alias(expr_alias))
                                 .collect::<Vec<_>>();
@@ -585,9 +584,9 @@ impl CommonSubexprEliminate {
                         // If there aren't any common aggregate sub-expressions, then just
                         // rebuild the aggregate node.
                         FoundCommonExprs::No {
-                            original_exprs: mut new_aggr_list,
+                            mut original_exprs_list,
                         } => {
-                            let rewritten_aggr_expr = new_aggr_list.pop().unwrap();
+                            let rewritten_aggr_expr = original_exprs_list.pop().unwrap();
 
                             // If there were common expressions extracted, then we need to
                             // make sure we restore the original column names.
@@ -661,15 +660,17 @@ impl CommonSubexprEliminate {
             .map_data(|common| match common {
                 FoundCommonExprs::Yes {
                     common_exprs,
-                    new_exprs: mut new_exprs_list,
-                    original_exprs: _,
+                    mut new_exprs_list,
+                    original_exprs_list: _,
                 } => {
                     let new_exprs = new_exprs_list.pop().unwrap();
                     build_common_expr_project_plan(input, common_exprs)
                         .map(|new_input| (new_exprs, new_input))
                 }
-                FoundCommonExprs::No { mut original_exprs } => {
-                    let new_exprs = original_exprs.pop().unwrap();
+                FoundCommonExprs::No {
+                    mut original_exprs_list,
+                } => {
+                    let new_exprs = original_exprs_list.pop().unwrap();
                     Ok((new_exprs, input))
                 }
             })?

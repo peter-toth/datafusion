@@ -17,6 +17,7 @@
 
 use std::any::Any;
 use std::fmt::Display;
+use std::hash::Hasher;
 use std::ops::Deref;
 use std::sync::Arc;
 use std::vec;
@@ -81,6 +82,7 @@ use datafusion::physical_plan::{ExecutionPlan, Partitioning, PhysicalExpr, Stati
 use datafusion::prelude::SessionContext;
 use datafusion::scalar::ScalarValue;
 use datafusion_common::config::TableParquetOptions;
+use datafusion_common::cse::HashNode;
 use datafusion_common::file_options::csv_writer::CsvWriterOptions;
 use datafusion_common::file_options::json_writer::JsonWriterOptions;
 use datafusion_common::parsers::CompressionTypeVariant;
@@ -783,6 +785,10 @@ fn roundtrip_parquet_exec_with_custom_predicate_expr() -> Result<()> {
         ) -> Result<Arc<dyn PhysicalExpr>> {
             todo!()
         }
+    }
+
+    impl HashNode for CustomPredicateExpr {
+        fn hash_node<H: Hasher>(&self, _state: &mut H) {}
     }
 
     #[derive(Debug)]

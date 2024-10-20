@@ -18,7 +18,7 @@
 //! Negation (-) expression
 
 use std::any::Any;
-use std::hash::Hash;
+use std::hash::{Hash, Hasher};
 use std::sync::Arc;
 
 use crate::PhysicalExpr;
@@ -28,6 +28,7 @@ use arrow::{
     datatypes::{DataType, Schema},
     record_batch::RecordBatch,
 };
+use datafusion_common::cse::HashNode;
 use datafusion_common::{plan_err, Result};
 use datafusion_expr::interval_arithmetic::Interval;
 use datafusion_expr::sort_properties::ExprProperties;
@@ -134,6 +135,10 @@ impl PhysicalExpr for NegativeExpr {
             range: children[0].range.clone().arithmetic_negate()?,
         })
     }
+}
+
+impl HashNode for NegativeExpr {
+    fn hash_node<H: Hasher>(&self, _state: &mut H) {}
 }
 
 /// Creates a unary expression NEGATIVE

@@ -19,12 +19,13 @@
 
 use std::any::Any;
 use std::fmt;
-use std::hash::Hash;
+use std::hash::{Hash, Hasher};
 use std::sync::Arc;
 
 use crate::PhysicalExpr;
 use arrow::datatypes::{DataType, Schema};
 use arrow::record_batch::RecordBatch;
+use datafusion_common::cse::HashNode;
 use datafusion_common::{cast::as_boolean_array, Result, ScalarValue};
 use datafusion_expr::ColumnarValue;
 
@@ -98,6 +99,10 @@ impl PhysicalExpr for NotExpr {
     ) -> Result<Arc<dyn PhysicalExpr>> {
         Ok(Arc::new(NotExpr::new(Arc::clone(&children[0]))))
     }
+}
+
+impl HashNode for NotExpr {
+    fn hash_node<H: Hasher>(&self, _state: &mut H) {}
 }
 
 /// Creates a unary expression NOT

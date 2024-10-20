@@ -26,6 +26,7 @@ use arrow::{
     datatypes::{DataType, Schema},
     record_batch::RecordBatch,
 };
+use datafusion_common::cse::HashNode;
 use datafusion_common::{internal_err, Result};
 use datafusion_expr::ColumnarValue;
 
@@ -89,6 +90,12 @@ impl PhysicalExpr for UnKnownColumn {
 
 impl Hash for UnKnownColumn {
     fn hash<H: Hasher>(&self, state: &mut H) {
+        self.name.hash(state);
+    }
+}
+
+impl HashNode for UnKnownColumn {
+    fn hash_node<H: Hasher>(&self, state: &mut H) {
         self.name.hash(state);
     }
 }

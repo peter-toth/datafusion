@@ -121,11 +121,12 @@ impl<'n, N: HashNode> Identifier<'n, N> {
 type IdArray<'n, N> = Vec<(usize, Option<Identifier<'n, N>>)>;
 
 /// A map that contains the number of normal and conditional occurrences of [`TreeNode`]s
-/// by their identifiers.
+/// by their identifiers. It also contains the position of a [`TreeNode`] in
+/// [`CommonNodes`] once a node is found to be common and got extracted.
 type NodeStats<'n, N> = HashMap<Identifier<'n, N>, (usize, usize, Option<usize>)>;
 
-/// A map that contains the common [`TreeNode`]s and their alias by their identifiers,
-/// extracted during the second, rewriting traversal.
+/// A list that contains the common [`TreeNode`]s and their alias, extracted during the
+/// second, rewriting traversal.
 type CommonNodes<'n, N> = Vec<(N, String)>;
 
 type ChildrenList<N> = (Vec<N>, Vec<N>);

@@ -223,7 +223,7 @@ impl HashNode for ScalarFunctionExpr {
         self.name.hash(state);
         self.return_type.hash(state);
         self.nullable.hash(state);
-        // Add `self.fun` when hash is available
+        self.fun.hash(state);
     }
 }
 

@@ -30,7 +30,6 @@ use crate::physical_optimizer::limited_distinct_aggregation::LimitedDistinctAggr
 use crate::physical_optimizer::output_requirements::OutputRequirements;
 use crate::physical_optimizer::sanity_checker::SanityCheckPlan;
 use crate::physical_optimizer::topk_aggregation::TopKAggregation;
-use datafusion_physical_optimizer::eliminate_common_physical_subexprs::EliminateCommonPhysicalSubexprs;
 use datafusion_physical_optimizer::PhysicalOptimizerRule;
 use std::sync::Arc;
 
@@ -103,10 +102,6 @@ impl PhysicalOptimizer {
             // replacing operators with fetching variants, or adding limits
             // past operators that support limit pushdown.
             Arc::new(LimitPushdown::new()),
-            // The EliminateCommonPhysicalSubExprs rule extracts common physical
-            // subexpression trees into a `ProjectionExec` node under the actual node to
-            // calculate the common values only once.
-            Arc::new(EliminateCommonPhysicalSubexprs::new()),
             // The SanityCheckPlan rule checks whether the order and
             // distribution requirements of each node in the plan
             // is satisfied. It will also reject non-runnable query

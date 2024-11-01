@@ -1046,32 +1046,47 @@ impl<T: DynTreeNode + ?Sized> TreeNode for Arc<T> {
             Ok(Transformed::no(self))
         }
     }
+}
 
-    fn transform_down_up<
-        FD: FnMut(Self) -> Result<Transformed<Self>>,
-        FU: FnMut(Self) -> Result<Transformed<Self>>,
-    >(
-        self,
-        f_down: FD,
-        f_up: FU,
-    ) -> Result<Transformed<Self>> {
-        self.rewrite(&mut FuncRewriter::new(f_down, f_up))
-    }
+pub trait TreeNodeNew: Sized {
+    fn visit_new<'n, V: TreeNodeVisitor<'n, Node = Self>>(
+        &'n self,
+        visitor: &mut V,
+    ) -> Result<TreeNodeRecursion>;
 
-    fn transform_down<F: FnMut(Self) -> Result<Transformed<Self>>>(
+    fn rewrite_new<R: TreeNodeRewriter<Node = Self>>(
         self,
-        f: F,
-    ) -> Result<Transformed<Self>> {
-        self.rewrite(&mut FuncRewriter::new(f, |node| Ok(Transformed::no(node))))
-    }
+        rewriter: &mut R,
+    ) -> Result<Transformed<Self>>;
+}
 
-    fn transform_up<F: FnMut(Self) -> Result<Transformed<Self>>>(
-        self,
-        f: F,
-    ) -> Result<Transformed<Self>> {
-        self.rewrite(&mut FuncRewriter::new(|node| Ok(Transformed::no(node)), f))
-    }
-    fn rewrite<R: TreeNodeRewriter<Node = Self>>(
+impl<T: DynTreeNode + ?Sized> TreeNodeNew for Arc<T> {
+    // fn transform_down_up<
+    //     FD: FnMut(Self) -> Result<Transformed<Self>>,
+    //     FU: FnMut(Self) -> Result<Transformed<Self>>,
+    // >(
+    //     self,
+    //     f_down: FD,
+    //     f_up: FU,
+    // ) -> Result<Transformed<Self>> {
+    //     self.rewrite(&mut FuncRewriter::new(f_down, f_up))
+    // }
+    //
+    // fn transform_down<F: FnMut(Self) -> Result<Transformed<Self>>>(
+    //     self,
+    //     f: F,
+    // ) -> Result<Transformed<Self>> {
+    //     self.rewrite(&mut FuncRewriter::new(f, |node| Ok(Transformed::no(node))))
+    // }
+    //
+    // fn transform_up<F: FnMut(Self) -> Result<Transformed<Self>>>(
+    //     self,
+    //     f: F,
+    // ) -> Result<Transformed<Self>> {
+    //     self.rewrite(&mut FuncRewriter::new(|node| Ok(Transformed::no(node)), f))
+    // }
+
+    fn rewrite_new<R: TreeNodeRewriter<Node = Self>>(
         self,
         rewriter: &mut R,
     ) -> Result<Transformed<Self>> {
@@ -1177,7 +1192,7 @@ impl<T: DynTreeNode + ?Sized> TreeNode for Arc<T> {
         unreachable!();
     }
 
-    fn visit<'n, V: TreeNodeVisitor<'n, Node = Self>>(
+    fn visit_new<'n, V: TreeNodeVisitor<'n, Node = Self>>(
         &'n self,
         visitor: &mut V,
     ) -> Result<TreeNodeRecursion> {
@@ -2551,6 +2566,7 @@ pub(crate) mod tests {
 
     pub mod test_dyn_tree_node {
         use super::*;
+        use crate::tree_node::TreeNodeNew;
 
         #[derive(Debug, Eq, Hash, PartialEq, Clone)]
         pub struct DynTestNode<T> {

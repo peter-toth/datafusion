@@ -18,6 +18,7 @@
 //! [`TreeNode`] for visiting and rewriting expression and plan trees
 
 use crate::Result;
+use recursive::recursive;
 use std::marker::PhantomData;
 use std::sync::Arc;
 
@@ -123,6 +124,7 @@ pub trait TreeNode: Sized {
     /// TreeNodeVisitor::f_up(ChildNode2)
     /// TreeNodeVisitor::f_up(ParentNode)
     /// ```
+    #[recursive]
     fn visit<'n, V: TreeNodeVisitor<'n, Node = Self>>(
         &'n self,
         visitor: &mut V,
@@ -172,6 +174,7 @@ pub trait TreeNode: Sized {
     /// TreeNodeRewriter::f_up(ChildNode2)
     /// TreeNodeRewriter::f_up(ParentNode)
     /// ```
+    #[recursive]
     fn rewrite<R: TreeNodeRewriter<Node = Self>>(
         self,
         rewriter: &mut R,
@@ -190,6 +193,7 @@ pub trait TreeNode: Sized {
     /// # See Also
     /// * [`Self::transform_down`] for the equivalent transformation API.
     /// * [`Self::visit`] for both top-down and bottom up traversal.
+    #[recursive]
     fn apply<'n, F: FnMut(&'n Self) -> Result<TreeNodeRecursion>>(
         &'n self,
         mut f: F,
@@ -208,6 +212,7 @@ pub trait TreeNode: Sized {
     /// (a bottom-up post-order traversal).
     ///
     /// A synonym of [`Self::transform_up`].
+    #[recursive]
     fn transform<F: FnMut(Self) -> Result<Transformed<Self>>>(
         self,
         f: F,
@@ -224,6 +229,7 @@ pub trait TreeNode: Sized {
     /// * [`Self::transform_up`] for a bottom-up (post-order) traversal.
     /// * [Self::transform_down_up] for a combined traversal with closures
     /// * [`Self::rewrite`] for a combined traversal with a visitor
+    #[recursive]
     fn transform_down<F: FnMut(Self) -> Result<Transformed<Self>>>(
         self,
         mut f: F,
@@ -256,6 +262,7 @@ pub trait TreeNode: Sized {
     /// * [`Self::transform_down`] top-down (pre-order) traversal.
     /// * [Self::transform_down_up] for a combined traversal with closures
     /// * [`Self::rewrite`] for a combined traversal with a visitor
+    #[recursive]
     fn transform_up<F: FnMut(Self) -> Result<Transformed<Self>>>(
         self,
         mut f: F,
@@ -375,6 +382,7 @@ pub trait TreeNode: Sized {
     ///                                                  | A |
     ///                                                  +---+
     /// ```
+    #[recursive]
     fn transform_down_up<
         FD: FnMut(Self) -> Result<Transformed<Self>>,
         FU: FnMut(Self) -> Result<Transformed<Self>>,

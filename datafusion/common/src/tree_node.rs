@@ -1337,8 +1337,8 @@ impl<T: ConcreteTreeNode> TreeNode for T {
     }
 }
 
-#[cfg(test)]
-pub(crate) mod tests {
+// #[cfg(test)]
+pub mod tests {
     use crate::tree_node::{
         DynTreeNode, Transformed, TreeNode, TreeNodeIterator, TreeNodeRecursion,
         TreeNodeRewriter, TreeNodeVisitor,
@@ -2633,18 +2633,62 @@ pub(crate) mod tests {
 
         node_tests!(ArcTestNode);
 
-        #[test]
-        fn test_large_tree() {
+        pub fn tall_tree() -> Arc<DynTestNode<String>> {
             let mut item = ArcTestNode::new_leaf("initial".to_string());
             for i in 0..3000 {
                 item =
                     ArcTestNode::new_with_children(vec![item], format!("parent-{}", i));
             }
+            item
+        }
 
+        pub fn wide_tree() -> Arc<DynTestNode<String>> {
+            let mut item = ArcTestNode::new_leaf("initial".to_string());
+            for i in 0..22 {
+                item = ArcTestNode::new_with_children(
+                    vec![item.clone(), item],
+                    format!("parent-{}", i),
+                );
+            }
+            item
+        }
+
+        pub fn visit_tree_new(item: Arc<DynTestNode<String>>) {
+            let mut visitor =
+                TestVisitor::new(Box::new(visit_continue), Box::new(visit_continue));
+
+            item.visit_new(&mut visitor).unwrap();
+        }
+
+        pub fn visit_tree_old(item: Arc<DynTestNode<String>>) {
             let mut visitor =
                 TestVisitor::new(Box::new(visit_continue), Box::new(visit_continue));
 
             item.visit(&mut visitor).unwrap();
+        }
+
+        #[test]
+        fn test_visit_tall_tree_new() {
+            let item = tall_tree();
+            visit_tree_new(item);
+        }
+
+        #[test]
+        fn test_visit_tall_tree_old() {
+            let item = tall_tree();
+            visit_tree_old(item);
+        }
+
+        #[test]
+        fn test_visit_wide_tree_new() {
+            let item = wide_tree();
+            visit_tree_new(item);
+        }
+
+        #[test]
+        fn test_visit_wide_tree_old() {
+            let item = wide_tree();
+            visit_tree_old(item);
         }
     }
 }
